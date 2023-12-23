@@ -1,0 +1,25 @@
+# Data
+attention_maps/
+logs/
+data/
+predictions/
+checkpoints/
+scripts/model_test.py
+scripts/build
+*.so
+scripts/models/PNSPlus/build
+*.pt
+*.pth
+scripts/models/Hybrid2d3d
+
+# Packaging
+venv/
+*.egg-info/
+__pycache__/
+*.pyc
+wandb/
+
+# Misc
+.DS_Store
+.vscode/
+.python-version
