@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
 from config.config import logger
-from config.config import args
 
 class L2ReconstructionLoss(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, args: dict) -> None:
         """L2ReconstructionLoss for training using inpainting on single images."""
         super(L2ReconstructionLoss, self).__init__()
+        self.args = args
 
     def forward(
         self, prediction: torch.Tensor, target: torch.Tensor, mask: torch.Tensor
@@ -28,8 +28,8 @@ class L2ReconstructionLoss(nn.Module):
 
         # convert target images back into range [0, 1] (unnormalize)
         for channel in range(target.shape[2]):
-            target[:, :, channel, :, :] *= float(args["normalize_std"][channel])
-            target[:, :, channel, :, :] += float(args["normalize_mean"][channel])
+            target[:, :, channel, :, :] *= float(self.args["normalize_std"][channel])
+            target[:, :, channel, :, :] += float(self.args["normalize_mean"][channel])
 
         # calculate the loss and return it
         out = torch.sub(target, prediction)

@@ -61,9 +61,9 @@ class ConvTempEncoderNSA(ConvTempEncoder):
         self.fusion_modules = torch.nn.ModuleList([FusionNSA([f], 4, [size], [size]) for f, size in zip(self.filters, sizes)])
 
 
-class TemporalFusionEncoder(torch.nn.Module):
+class SwinTempEncoder(torch.nn.Module):
     def __init__(self, backbone: any = swin_v2_t(weights = Swin_V2_T_Weights.DEFAULT), stages: int = 4) -> None:
-        super(TemporalFusionEncoder, self).__init__()
+        super(SwinTempEncoder, self).__init__()
         assert 1 <= stages <= 4, f"Value for number of stages ({stages}) out of bounds. Make sure it is between 1 and 4"
         self.stages = stages
         self.feature_extractor = backbone.features[:stages*2]
@@ -96,22 +96,22 @@ class TemporalFusionEncoder(torch.nn.Module):
         return out
 
 
-class TemporalFusionEncoder3D(TemporalFusionEncoder):
+class TemporalFusionEncoder3D(SwinTempEncoder):
     def __init__(self, backbone: any = swin_v2_t(weights = Swin_V2_T_Weights.DEFAULT), stages = 4) -> None:
         super(TemporalFusionEncoder3D, self).__init__(backbone=backbone, stages=stages)
         self.fusion_modules = torch.nn.ModuleList([Fusion3D([f]) for f in self.filters])
 
-class TemporalFusionEncoderLSTM(TemporalFusionEncoder):
+class TemporalFusionEncoderLSTM(SwinTempEncoder):
     def __init__(self, backbone: any = swin_v2_t(weights = Swin_V2_T_Weights.DEFAULT), stages = 4) -> None:
         super(TemporalFusionEncoderLSTM, self).__init__(backbone=backbone, stages=stages)
         self.fusion_modules = torch.nn.ModuleList([FusionLSTM([f], bidirectional=True) for f in self.filters])
 
-class TemporalFusionEncoderAttention(TemporalFusionEncoder):
+class TemporalFusionEncoderAttention(SwinTempEncoder):
     def __init__(self, backbone: any = swin_v2_t(weights = Swin_V2_T_Weights.DEFAULT), stages = 4) -> None:
         super(TemporalFusionEncoderAttention, self).__init__(backbone=backbone, stages=stages)
         self.fusion_modules = torch.nn.ModuleList([FusionAttention([f], 4, spatial = False) for f in self.filters])
 
-class TemporalFusionEncoderNSA(TemporalFusionEncoder):
+class TemporalFusionEncoderNSA(SwinTempEncoder):
     def __init__(self, backbone: any = swin_v2_t(weights =Swin_V2_T_Weights.DEFAULT), stages = 4) -> None:
         super(TemporalFusionEncoderNSA, self).__init__(backbone = backbone, stages = stages)
         sizes = [4*2**(4-s) for s in range(stages)]

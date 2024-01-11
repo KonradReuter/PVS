@@ -309,6 +309,46 @@ class SingleImageModelWrapper(torch.nn.Module):
                 x = self.identity(x)
         return x
 
+def adjust_args(model_name: str, args: dict):
+    """Automatically adjust args for specific SOTA models
+
+    Args:
+        model_name (str): Name of the Model
+        args (dict): Args to be adjusted
+    """
+    model_name = model_name.split(".")[0]
+
+    if model_name == "Conv_NSA":
+        args["amp"] = False
+    if model_name == "Conv_NSA_skip":
+        args["amp"] = False
+    if model_name == "Conv_NSA_enc":
+        args["amp"] = False
+    if model_name == "TransFuse":
+        args["loss_factors"] = [0.2, 0.3, 0.5]
+    if model_name == "PraNet":
+        args["loss_factors"] = [1.0, 1.0, 1.0, 1.0]
+    if model_name == "CASCADE":
+        args["loss_factors"] = [1.0, 1.0, 1.0, 1.0]
+    if model_name == "COSNet":
+        args["num_frames"] = 2
+        args["output_frames"] = -2
+        args["time_interval"] = 4
+    if model_name == "HybridNet":
+        args["loss_factors"] = [1.0, 1.0]
+        args["output_frames"] = 2
+        args["unique"] = False
+    if model_name == "PNSNet":
+        args["amp"] = False
+    if model_name == "PNSPlusNet":
+        args["amp"] = False
+        args["num_frames"] = 6
+        args["anchor_frame"] = True
+    if model_name == "VACSNet":
+        args["loss_factors"] = [0.2, 0.2, 0.2, 0.2, 0.2]
+
+    return args
+
 if __name__ == "__main__":
     #from scripts.swin_model import PolypSwin
     #model = PolypSwin().to(device)

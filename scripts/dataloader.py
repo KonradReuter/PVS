@@ -6,7 +6,7 @@ import natsort
 import numpy as np
 import torch
 from PIL import Image
-from torch.utils.data import ConcatDataset, Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader
 
 from config import config
 from scripts.transforms import *
@@ -371,7 +371,7 @@ def get_dataloaders(args: dict) -> dict:
     """Function to generate dataloaders for the datasets
 
     Args:
-        args (dict): Dictionary containg hyperparameters.
+        args (dict): Dictionary containing hyperparameters.
 
     Returns:
         dict: Dictionary with the different dataloaders.

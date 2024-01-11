@@ -3,13 +3,13 @@ import torch
 from torch.utils.data import DataLoader
 
 import wandb
-from config.config import device, logger, args
+from config.config import device, logger
 from scripts.transforms import RandomRectDropout
 from scripts.utils import EarlyStopping
 
 scaler = torch.cuda.amp.GradScaler()
 
-def train_step_masked(dataloader: DataLoader, model: any, loss_fn: any, optimizer: any, amp = True) -> float:
+def train_step_masked(dataloader: DataLoader, model: any, loss_fn: any, optimizer: any, args: dict) -> float:
     """Function which trains the given model with all the data from the given dataloader.
 
     Args:
@@ -17,6 +17,7 @@ def train_step_masked(dataloader: DataLoader, model: any, loss_fn: any, optimize
         model (pytorch model): Model to be trained.
         loss_fn (loss function): Function to calculate the training loss.
         optimizer (optimizer): Optimizer for backpropagation.
+        args (dict): Arg Dictionary
 
     Returns:
         float: average loss
@@ -43,7 +44,7 @@ def train_step_masked(dataloader: DataLoader, model: any, loss_fn: any, optimize
 
         mask = mask.to(device)
 
-        if amp:
+        if args["amp"]:
             with torch.autocast(device_type=device.type):
                 pred = model(img)
                 if type(pred) == list:
@@ -77,14 +78,14 @@ def train_step_masked(dataloader: DataLoader, model: any, loss_fn: any, optimize
     return train_loss.item() / num_batches
 
 
-def validation_step_masked(dataloader: DataLoader, model: any, loss_fn: any, amp = True) -> float:
+def validation_step_masked(dataloader: DataLoader, model: any, loss_fn: any, args: dict) -> float:
     """Evaluate the model with the data from the dataloader
 
     Args:
         dataloader (DataLoader): Dataloader
         model (pytorch model): model to evaluate
         loss_fn (loss function): Function to calculate the validation loss.
-
+        args (dict): Arg Dictionary
     Returns:
         float: average loss
     """
@@ -106,7 +107,7 @@ def validation_step_masked(dataloader: DataLoader, model: any, loss_fn: any, amp
                 mask = mask.unsqueeze(1)
             mask = mask.to(device)
 
-            if amp:
+            if args["amp"]:
                 with torch.autocast(device_type=device.type):
                     pred = model(img)
                     if type(pred) == list:
@@ -125,9 +126,7 @@ def validation_step_masked(dataloader: DataLoader, model: any, loss_fn: any, amp
     return validation_loss.item() / num_batches
 
 
-def train_step_inpainting(
-    dataloader: DataLoader, model: any, loss_fn: any, optimizer: any, amp = True
-) -> float:
+def train_step_inpainting(dataloader: DataLoader, model: any, loss_fn: any, optimizer: any, args: dict) -> float:
     """Training step for pretraining with inpainting.
 
     Args:
@@ -135,7 +134,7 @@ def train_step_inpainting(
         model (any): Model to be trained.
         loss_fn (any): Loss function. Will be called with three arguments: loss_fn(pred, target, mask)
         optimizer (any): Optimizter.
-
+        args (dict): Arg dictionary
     Returns:
         float: average loss
     """
@@ -157,7 +156,7 @@ def train_step_inpainting(
         img_cut = img_cut.to(device)
         # generate output and calculate the loss
 
-        if amp:
+        if args["amp"]:
             with torch.autocast(device_type=device.type):
                 pred = model(img_cut)
                 loss = loss_fn(pred, img, mask)
@@ -179,14 +178,14 @@ def train_step_inpainting(
     return train_loss.item() / num_batches
 
 
-def validation_step_inpainting(dataloader: DataLoader, model: any, loss_fn: any, amp = True) -> float:
+def validation_step_inpainting(dataloader: DataLoader, model: any, loss_fn: any, args: dict) -> float:
     """_summary_
 
     Args:
         dataloader (DataLoader): Dataloader
         model (any): Model to evaluate
         loss_fn (any): Function for calculating the loss
-
+        args (dict): Arg Dictionary
     Returns:
         float: average loss
     """
@@ -209,7 +208,7 @@ def validation_step_inpainting(dataloader: DataLoader, model: any, loss_fn: any,
             img_cut = torch.sub(img, torch.mul(img, mask))
             img_cut = img_cut.to(device)
             # generate detection and calculate loss
-            if amp:
+            if args["amp"]:
                 with torch.autocast(device_type=device.type):
                     pred = model(img_cut)
                     loss = loss_fn(pred, img, mask)
@@ -224,7 +223,7 @@ def validation_step_inpainting(dataloader: DataLoader, model: any, loss_fn: any,
 
 
 def train_loop(
-    train_dataloader: DataLoader, validation_dataloader: DataLoader, model: any, loss_fn: any, optimizer: any, epochs: int, stopper: EarlyStopping = None, amp: bool = True, scheduler: any = None) -> None:
+    train_dataloader: DataLoader, validation_dataloader: DataLoader, model: any, loss_fn: any, optimizer: any, args: dict, stopper: EarlyStopping = None, scheduler: any = None) -> None:
     """Performs training steps for the given number of epochs
 
     Args:
@@ -233,20 +232,20 @@ def train_loop(
         model (any): Model to be trained
         loss_fn (any): Loss function
         optimizer (any): Optimizer
-        epochs (int): Maximum number of epochs
+        args (dict): Arg dictionary
         stopper (EarlyStopping, optional): EarlyStopper to prevent overfitting. Defaults to None.
-        amp (bool, optional): If true, automatic mixed precision is used. Defaults to True.
         scheduler (any, optional): Learning rate scheduler. Defaults to None.
     """
     logger.info(f"Training with {len(train_dataloader.dataset)} images and validation with {len(validation_dataloader.dataset)} images.")
     # for each epoch perform a train and a validation step
-    for e in range(epochs):
-        train_loss = train_step_masked(train_dataloader, model, loss_fn, optimizer, amp = amp)
-        validation_loss = validation_step_masked(validation_dataloader, model, loss_fn, amp = amp)
+    for e in range(args["epochs"]):
+        train_loss = train_step_masked(train_dataloader, model, loss_fn, optimizer, args)
+        validation_loss = validation_step_masked(validation_dataloader, model, loss_fn, args)
         logger.info(
             f"Train epoch {e}: train_loss: {train_loss}, validation_loss: {validation_loss}"
         )
-        wandb.log({"train_loss": train_loss, "validation_loss": validation_loss, "train_epoch": e})
+        if args["use_wandb"]:
+            wandb.log({"train_loss": train_loss, "validation_loss": validation_loss, "train_epoch": e})
         if scheduler:
             scheduler.step()
         # check if the training should be stopped
@@ -257,7 +256,7 @@ def train_loop(
 
 
 def pre_train_loop(
-    train_dataloader: DataLoader, validation_dataloader: DataLoader, model: any, loss_fn: any, optimizer: any, epochs: int, stopper: EarlyStopping =None, amp: bool = True, scheduler = None) -> None:
+    train_dataloader: DataLoader, validation_dataloader: DataLoader, model: any, loss_fn: any, optimizer: any, args: dict, stopper: EarlyStopping = None, scheduler = None) -> None:
     """Performs pre training steps for the given number of epochs
 
     Args:
@@ -265,21 +264,21 @@ def pre_train_loop(
         validation_dataloader (DataLoader): Dataloader for the validation set
         model (any): Model to be trained
         loss_fn (any): Loss function
-        optimizer (any): Optimizer
-        epochs (int): Maximum number of epochs
+        optimizer (any): Optimizer,
+        args (dict): Arg dictionary
         stopper (EarlyStopping, optional): EarlyStopper to prevent overfitting. Defaults to None.
-        amp (bool, optional): If true, automatic mixed precision is used. Defaults to True.
         scheduler (any, optional): Learning rate scheduler. Defaults to None.
     """
     logger.info(f"Pretraining with {len(train_dataloader.dataset)} images and validation with {len(validation_dataloader.dataset)} images.")
-    for e in range(epochs):
+    for e in range(args["epochs"]):
         # for each epoch perform a train and a validation step
-        train_loss = train_step_inpainting(train_dataloader, model, loss_fn, optimizer, amp = amp)
-        validation_loss = validation_step_inpainting(validation_dataloader, model, loss_fn, amp = amp)
+        train_loss = train_step_inpainting(train_dataloader, model, loss_fn, optimizer, args)
+        validation_loss = validation_step_inpainting(validation_dataloader, model, loss_fn, args)
         logger.info(
             f"Pretrain epoch {e}: train_loss: {train_loss}, validation_loss: {validation_loss}"
         )
-        wandb.log({"pretrain_loss": train_loss, "pt_validation_loss": validation_loss, "pt_epoch": e})
+        if args["use_wandb"]:
+            wandb.log({"pretrain_loss": train_loss, "pt_validation_loss": validation_loss, "pt_epoch": e})
         # check if the training should be stopped
         if scheduler:
             scheduler.step()

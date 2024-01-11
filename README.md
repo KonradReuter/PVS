@@ -1,6 +1,12 @@
-# Implementation and Evaluation of Deep Learning Methods for Colorectal Polyp Video Segmentation
+# PolypNextLSTM: A lightweight and fast polyp video segmentation network using ConvNext and ConvLSTM
 
-The repository is currently in the state how it was during my master thesis. Adjustments to make it more user-friendly will follow.
+Contact: Konrad Reuter, konrad.reuter@tuhh.de
+
+This repository contains the source code for PolypNextLSTM. The main components of the model are an encoder based on ConvNext-tiny, a bidirectional convolutional LSTM for fusing information across multiple frames and a UNet-like decoder.
+
+![PolypNextLSTM](./figures/model.png "PolypNextLSTM")
+
+![Components](./figures/model_components.png "Components")
 
 ## Data preparation
 
@@ -13,25 +19,37 @@ Clone the repository and create a data folder:
 
 Request and prepare the SUN-SEG dataset as explained [here](https://github.com/GewelsJI/VPS/blob/main/docs/DATA_PREPARATION.md) and move it to the created data folder.
 
-
 ## Create Virtual Environment and Install Dependencies
 
 ```
 python3 -m venv venv
-venv/bin/activate
+source venv/bin/activate || ./venv/Scripts/activate
 python3 -m pip install pip setuptools wheel
-python3 -m pip install -e
+python3 -m pip install -e .
 ```
 
 ## Training & Evaluating
 
+The [main script](scripts/main.py) offers functions for training and evaluating a model. The general usage is as follows.
+```
+python scripts/main.py train --model-name=<model_name> --file-name=<file_name> --run-name=<run_name>
+python scripts/main.py evaluate --model-name=<model_name> --file-name=<file_name> --run-name=<run_name>
+```
+Here the **model-name** defines which model is trained/evaluated. Our proposed model from above can be selected under the name "Conv_LSTM". Several other models used in our experiments can be used. A full list is given [here](scripts/README.md).
+
+The **file-name** defines the name of the weight file. The validation fold number will automatically be added to the end of the file name.
+
+The **run-name** defines the name under which the run is logged in WandB.
+
+To configure the hyperparameters, please edit the [args.json](config/args.json) file. A more detailed explanation of the different hyperparameters is given [here](config/README.md).
+
+During our experiments we used shell scripts to chain multiple model trainings.
 There are four scripts for training and evaluating models:
+
 - **train_models.sh**: Trains and evaluates all constructed models using 5-fold cross validation.
-- **train_num_frames.sh**: Trains and evaluates our SOTA model with varying number of input frames using 5-fold cross validation.
+- **train_num_frames.sh**: Trains and evaluates our PolypNextLSTM model with varying number of input frames using 5-fold cross validation.
 - **train_single.sh**: Trains a model using a single direction ConvLSTM instead of a bidirectional one using 5-fold cross validation.
 - **train_sota.sh**: Trains and evaluates 10 state-of-the-art models using 5-fold cross validation.
-
-The training progress and evaluation results are logged in WandB.
 
 ### HybridNet
 
@@ -50,7 +68,12 @@ python setup.py build develop
 
 ### SOTA backbone weights
 
-CASCADE, COSNet and TransFuse use pretrained backbone weights, which are not downloaded automatically. Please refer to the according repository linked below in order to get the weight files and move them into the according model folder.
+CASCADE, COSNet and TransFuse use pretrained backbone weights, which are not downloaded automatically. Please download the weights from the following links and move them into the according model folder.
+
+- [PVTv2-B2](https://drive.google.com/drive/folders/1Eu8v9vMRvt-dyCH0XSV2i77lAd62nPXV) (CASCADE)
+- [DeepLabV3](https://drive.google.com/file/d/1hy0-BAEestT9H4a3Sv78xrHrzmZga9mj/view) (COSNet)
+- [ResNet34](https://download.pytorch.org/models/resnet34-333f7ec4.pth) (TransFuse)
+- [DeiT-small](https://dl.fbaipublicfiles.com/deit/deit_small_patch16_224-cd65a155.pth) (TransFuse)
 
 ## Code from other repositories
 

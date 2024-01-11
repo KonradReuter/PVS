@@ -3,7 +3,6 @@ from scripts.models.UNet.modules import DoubleConv, DoubleConv3D
 from scripts.models.PVS.convlstm import BidirectionalConvLSTM, ConvLSTM
 from scripts.models.PNSPlus.LightRFB import LightRFB
 #from scripts.models.PNSPlus.PNSPlusModule import NS_Block
-from config.config import logger, args, device
 from torchvision.models.swin_transformer import SwinTransformerBlockV2
 
 def temporal2spatial(x: torch.Tensor):

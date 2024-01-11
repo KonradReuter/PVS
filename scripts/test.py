@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import DataLoader
 
 import wandb
-from config.config import device, logger, args, ATT_MAP_DIR, PRED_DIR
+from config.config import device, logger, ATT_MAP_DIR, PRED_DIR
 from scripts.transforms import *
 from medpy.metric.binary import hd95
 from math import isnan
@@ -235,16 +235,9 @@ class Evaluator(object):
             metrics["hd95"] = torch.mean(torch.stack(clean_hd95_list)).item()
             metrics["hd95 std"] = torch.std(torch.stack(clean_hd95_list)).item()
         return metrics
-    
-    def get_dice_as_df(self):
-        dice_list_float = [d.item() for d in self.dice_list]
-        dice_dict = {"Path": self.paths_list,
-                     "Dice": dice_list_float}
-        dice_frame = pd.DataFrame(dice_dict)
-        return dice_frame
 
 
-def _save_attention_maps(images, img_paths, attention, model_name, set_name):
+def _save_attention_maps(images, img_paths, attention, model_name, set_name, args):
     # images and attention maps come in form b x c x f x h x w => reshape
     images = images.permute(0, 2, 1, 3, 4)
     attention = attention.permute(0, 2, 1, 3, 4)
@@ -330,7 +323,7 @@ def test_loop(dataloader: DataLoader, model: any, loss_fn: any, args: dict, eval
                 # medcam expects input in shape b x c x f x h x w, therefore we need to reshape
                 img = img.permute(0, 2, 1, 3, 4).contiguous()
                 pred, attention = model(img)
-                _save_attention_maps(img, img_paths, attention, model_name, set_name)
+                _save_attention_maps(img, img_paths, attention, model_name, set_name, args)
                 if type(pred) == list:
                     pred = pred[-1]
                 # reshape back to original form
@@ -350,7 +343,8 @@ def test_loop(dataloader: DataLoader, model: any, loss_fn: any, args: dict, eval
             test_loss += loss.item()
 
     logger.info(f"Average test loss: {test_loss/num_batches}")
-    wandb.log({"Test loss": test_loss / num_batches})
+    if args["use_wandb"]:
+        wandb.log({"Test loss": test_loss / num_batches})
 
 if __name__ == "__main__":
     from PIL import Image

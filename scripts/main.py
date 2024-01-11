@@ -1,29 +1,22 @@
 from pathlib import Path
 import copy
-
 import numpy as np
 import pandas as pd
 import typer
 from medcam import medcam
-from torch.utils.data import DataLoader, random_split
 from torch.optim.lr_scheduler import ExponentialLR
-
 import wandb
-from config.config import PRED_DIR, CHECKPOINT_DIR, LOGS_DIR, logger, args, device
+from config.config import CHECKPOINT_DIR, LOGS_DIR, logger, args, device
 from scripts.dataloader import get_dataloaders, get_datasets
 from scripts.loss import L2ReconstructionLoss, get_loss
 from scripts.test import test_loop, Evaluator
 from scripts.train import pre_train_loop, train_loop
-from scripts.transforms import *
-from scripts.utils import EarlyStopping, calculate_mean_std, make_reproducible, get_optimizer, SingleImageModelWrapper
+from scripts.utils import EarlyStopping, calculate_mean_std, make_reproducible, get_optimizer, adjust_args
 from scripts.models.PVS.pvs import *
 from scripts.models.PNSPlus.PNSPlusNetwork import PNSPlusNet
 from scripts.models.PNSPlus.PNS_Network import PNSNet
-from scripts.models.UNet.model import UNet
-from torchvision.models import ResNet50_Weights
 from scripts.models.PraNet.PraNet_Res2Net import get_PraNet
 from scripts.models.SANet.model import get_SANet
-from scripts.models.FCBFormer.models import get_FCBFormer
 from scripts.models.CASCADE.networks import get_CASCADE
 from scripts.models.SSTAN.vacs import VACSNet
 from scripts.models.Hybrid2d3d.network import get_HybridNet
@@ -35,64 +28,145 @@ app = typer.Typer(pretty_exceptions_show_locals=False)
 make_reproducible(42)
 loss = get_loss(args["loss"])(smooth=0.0)
 optimizer_module = get_optimizer(args["optimizer"])
-pt_loss = L2ReconstructionLoss()
+pt_loss = L2ReconstructionLoss(args)
 np.float = float # np.float deprecated but is needed for medcam ...
 np.bool = bool # np.bool deprecated but needed for calculation of hausdorff distance.
-get_model = ConvNext_base3
 
+# Model dict so a model can be selected by passing its name to the train/evaluation functions
+model_dict = {
+    "Conv_base3": ConvNext_base3,
+    "Conv_base": ConvNext_base,
+    "Swin_base3": PolypSwin_base3,
+    "Swin_base": PolypSwin_base,
+    "Conv_simple": ConvNext_simple,
+    "Conv_simple_skip": ConvNext_simple_skip,
+    "Conv_simple_enc": ConvNext_simple_enc,
+    "Conv_3D": ConvNext_3D,
+    "Conv_3D_skip": ConvNext_3D_skip,
+    "Conv_3D_enc": ConvNext_3D_enc,
+    "Conv_LSTM": ConvNext_LSTM,
+    "Conv_LSTM_skip": ConvNext_LSTM_skip,
+    "Conv_LSTM_enc": ConvNext_LSTM_enc,
+    "Conv_Attention": ConvNext_Attention,
+    "Conv_Attention_skip": ConvNext_Attention_skip,
+    "Conv_Attention_enc": ConvNext_Attention_enc,
+    "Conv_NSA": ConvNext_NSA,
+    "Conv_NSA_skip": ConvNext_NSA_skip,
+    "Conv_NSA_enc": ConvNext_NSA_enc,
+    "Conv_LSTM_single": ConvNext_LSTM_single,
+    "DeepLab": get_DeepLab,
+    "SANet": get_SANet,
+    "TransFuse": get_TransFuse,
+    "PraNet": get_PraNet,
+    "CASCADE": get_CASCADE,
+    "COSNet": CoattentionNet,
+    "HybridNet": get_HybridNet,
+    "PNSNet": PNSNet,
+    "PNSPlusNet": PNSPlusNet,
+    "VACSNet": VACSNet
+}
+
+# pretraining was not used in our experiments
 @app.command()
-def pretrain(model_save_name:str = "model.pt", run_name:str = "run") -> None:
-    model_save_name = model_save_name.split(".")[0]+"_pretrained.pt"
-    run = wandb.init(project="pvs", config=args, name=run_name)
+def pretrain(model_name:str = "Conv_base3", file_name:str = "model.pt", run_name:str = "run"):
+    """Pretrain a model
+
+    Args:
+        model_name (str, optional): Name of the model. Defaults to "Conv_base3".
+        file_name (str, optional): File name for the weight file. Defaults to "model.pt".
+        run_name (str, optional): Name of the WandB run. Defaults to "run".
+    """
+    # adjust args to specific model
+    args = adjust_args(model_name, args)
+    # add "pretrained" to file name
+    file_name = file_name.split(".")[0]+"_pretrained.pt"
+    # initialize wandb run
+    if args["use_wandb"]:
+        run = wandb.init(project="pvs", config=args, name=run_name)
+    # get dataloaders and model
     dataloaders = get_dataloaders(args)
-    model = get_model()
+    model = model_dict[model_name]()
+    # adjust output layer for inpainting task
     model.out_layer = torch.nn.Conv2d(24, 3, 1)
     model.to(device)
+    # define optimizer, scheduler and early stopper
     optimizer = optimizer_module(params=model.parameters(), lr=args["inpainting_learning_rate"], weight_decay=args["weight_decay"])
     scheduler = ExponentialLR(optimizer=optimizer, gamma=args["scheduler_gamma"])
-
     pretrain_stopper = EarlyStopping(
         patience=args["patience"],
         verbose=True,
-        path=Path(CHECKPOINT_DIR, model_save_name),
+        path=Path(CHECKPOINT_DIR, file_name),
         trace_func=logger.info,
     )
+    # run pretraining
+    pre_train_loop(dataloaders["unmasked_vid_train"], dataloaders["unmasked_vid_valid"], model, pt_loss, optimizer, args, pretrain_stopper, scheduler=scheduler)
 
-    pre_train_loop(dataloaders["unmasked_vid_train"], dataloaders["unmasked_vid_valid"], model, pt_loss, optimizer, args["epochs"], pretrain_stopper, amp = args["amp"], scheduler=scheduler)
 
 @app.command()
-def train(model_save_name:str = "model.pt", run_name:str = "run", pretrained: bool = False):
-    pt_model_name = model_save_name.split(".")[0]+"_pretrained.pt"
-    model_save_name = model_save_name.split(".")[0]+str(args["validation_fold"])+".pt"
-    run = wandb.init(project="pvs", config=args, name=run_name)
+def train(model_name:str = "Conv_base3", file_name:str = "model.pt", run_name:str = "run", pretrained: bool = False):
+    """Train a model
+
+    Args:
+        model_name (str, optional): Model name. Defaults to "Conv_base3".
+        file_name (str, optional): Weight file name. Defaults to "model.pt".
+        run_name (str, optional): WandB run name. Defaults to "run".
+        pretrained (bool, optional): If there exists a pretrained weight file. The weight file is expected to have the name "<file_name>_pretrained.pt". Defaults to False.
+    """
+    # Adjust args to specific model
+    args = adjust_args(model_name, args)
+    # get name of possible pretrained file
+    pt_file_name = file_name.split(".")[0]+"_pretrained.pt"
+    # add the number of the current validation fold to the file name
+    file_name = file_name.split(".")[0]+str(args["validation_fold"])+".pt"
+    # initialize WandB
+    if args["use_wandb"]:
+        run = wandb.init(project="pvs", config=args, name=run_name)
+    # get dataloader and model
     dataloaders = get_dataloaders(args)
-    model = get_model()
+    model = model_dict[model_name]()
+    # if there exists a pretrained file, load it
     if pretrained:
         model.out_layer = torch.nn.Conv2d(24, 3, 1)
         model.to(device)
-        model.load_state_dict(torch.load(Path(CHECKPOINT_DIR, pt_model_name)))
+        model.load_state_dict(torch.load(Path(CHECKPOINT_DIR, pt_file_name)))
         model.out_layer = torch.nn.Conv2d(24, 1, 1)
     model.to(device)
+    # define optimizer, scheduler and early stopper
     optimizer = optimizer_module(params=model.parameters(), lr=args["learning_rate"], weight_decay=args["weight_decay"])
     scheduler = ExponentialLR(optimizer=optimizer, gamma=args["scheduler_gamma"])
     train_stopper = EarlyStopping(
         patience=args["patience"],
         verbose=True,
-        path=Path(CHECKPOINT_DIR, model_save_name),
+        path=Path(CHECKPOINT_DIR, file_name),
         trace_func=logger.info,
     )
-    train_loop(dataloaders["masked_vid_train"], dataloaders["masked_vid_valid"], model, loss, optimizer, args["epochs"], stopper=train_stopper, amp=args["amp"], scheduler=scheduler)
+    # run training loop
+    train_loop(dataloaders["masked_vid_train"], dataloaders["masked_vid_valid"], model, loss, optimizer, args, stopper=train_stopper, scheduler=scheduler)
 
-
+# multi threshold evaluation was not used in our experiments
 @app.command()
-def multiThresholdEvaluation(model_name: str = "model.pt", test_set: str = "masked_vid_test_easy_seen"):
-    run = wandb.init(project="pvs", config=args)
-    dataloaders = get_dataloaders(args)
-    model = PolypSwin(args["fusion_module"]).to(device)
-    model.load_state_dict(torch.load(Path(CHECKPOINT_DIR, model_name)))
+def multiThresholdEvaluation(model_name:str = "Conv_base3", file_name: str = "model.pt", test_set: str = "masked_vid_test_easy_seen"):
+    """Evaluate a model with different thresholds
 
+    Args:
+        model_name (str, optional): Model name. Defaults to "Conv_base3".
+        file_name (str, optional): Name of the weight file. Defaults to "model.pt".
+        test_set (str, optional): Name of the test set that should be used for evaluation. Defaults to "masked_vid_test_easy_seen".
+    """
+    # adjust args to specific model
+    args = adjust_args(model_name, args)
+    # initialize wandb
+    if args["use_wandb"]:
+        run = wandb.init(project="pvs", config=args)
+    # get dataloaders and model
+    dataloaders = get_dataloaders(args)
+    model = model_dict[model_name]().to(device)
+    model.load_state_dict(torch.load(Path(CHECKPOINT_DIR, file_name)))
+
+    # create a list of evaluators with different thresholds
     evaluator_list = []
 
+    # threshold = None means that the model outputs are not converted into binary, but floating point values between 0.0 and 1.0 are used
     evaluator_list.append(Evaluator(
             accuracy=True,
             precision=True,
@@ -119,8 +193,10 @@ def multiThresholdEvaluation(model_name: str = "model.pt", test_set: str = "mask
             threshold=t
     ))
 
-    test_loop(dataloaders[test_set], model, loss, args, evaluator_list)
+    # run the test loop
+    test_loop(dataloaders[test_set], model, loss, args, evaluator_list, model_name, test_set)
 
+    # write results to csv
     results_list = []
     for e in evaluator_list:
         results = e.getMetrics()
@@ -132,15 +208,30 @@ def multiThresholdEvaluation(model_name: str = "model.pt", test_set: str = "mask
 
 
 @app.command()
-def evaluate(model_name:str = "model.pt", run_name:str = "run"):
-    model_name = model_name.split(".")[0]+str(args["validation_fold"])+".pt"
-    run = wandb.init(project="pvs", config=args, name = run_name)
+def evaluate(model_name: str = "Conv_base3", file_name:str = "model.pt", run_name:str = "run"):
+    """Evaluate a model on all SUN-SEG test sets
+
+    Args:
+        model_name (str, optional): Model Name. Defaults to "Conv_base3".
+        file_name (str, optional): Name of the weight file. Defaults to "model.pt".
+        run_name (str, optional): Name of the WandB run. Defaults to "run".
+    """
+    # Adjust args to specific model
+    args = adjust_args(model_name, args)
+    # add validation fold number to file name
+    file_name = file_name.split(".")[0]+str(args["validation_fold"])+".pt"
+    # initialize wandb
+    if args["use_wandb"]:
+        run = wandb.init(project="pvs", config=args, name = run_name)
+    # get dataloaders and model
     dataloaders = get_dataloaders(args)
-    model = get_model().to(device)
-    model.load_state_dict(torch.load(Path(CHECKPOINT_DIR, model_name), map_location=device))
+    model = model_dict[model_name]().to(device)
+    model.load_state_dict(torch.load(Path(CHECKPOINT_DIR, file_name), map_location=device))
+    # initialize medcam
     if args["save_attention_maps"]:
         model = medcam.inject(model, backend="gcam", return_attention=True)
 
+    # define the evaluators
     evaluator_es = Evaluator(
         accuracy=False,
         precision=False,
@@ -158,11 +249,13 @@ def evaluate(model_name:str = "model.pt", run_name:str = "run"):
     evaluator_hs = copy.deepcopy(evaluator_es)
     evaluator_hu = copy.deepcopy(evaluator_es)
 
-    test_loop(dataloaders["masked_vid_test_easy_seen"], model, loss, args, evaluator_es, model_name.split(".")[0], "ES")
-    test_loop(dataloaders["masked_vid_test_easy_unseen"], model, loss, args, evaluator_eu, model_name.split(".")[0], "EU")
-    test_loop(dataloaders["masked_vid_test_hard_seen"], model, loss, args, evaluator_hs, model_name.split(".")[0], "HS")
-    test_loop(dataloaders["masked_vid_test_hard_unseen"], model, loss, args, evaluator_hu, model_name.split(".")[0], "HU")
+    # run test loops
+    test_loop(dataloaders["masked_vid_test_easy_seen"], model, loss, args, evaluator_es, model_name, "ES")
+    test_loop(dataloaders["masked_vid_test_easy_unseen"], model, loss, args, evaluator_eu, model_name, "EU")
+    test_loop(dataloaders["masked_vid_test_hard_seen"], model, loss, args, evaluator_hs, model_name, "HS")
+    test_loop(dataloaders["masked_vid_test_hard_unseen"], model, loss, args, evaluator_hu, model_name, "HU")
 
+    # get performance metrics
     performance_es = evaluator_es.getMetrics()
     performance_es["set"] = "easy seen"
     performance_eu = evaluator_eu.getMetrics()
@@ -172,27 +265,23 @@ def evaluate(model_name:str = "model.pt", run_name:str = "run"):
     performance_hu = evaluator_hu.getMetrics()
     performance_hu["set"] = "hard unseen"
 
+    # log performance in wandb
+    if args["use_wandb"]:
+        wandb.log(performance_es)
+        wandb.log(performance_eu)
+        wandb.log(performance_hs)
+        wandb.log(performance_hu)
+
+    # log in console
     logger.info(f"Easy seen: {performance_es}")
     logger.info(f"Easy unseen: {performance_eu}")
     logger.info(f"Hard seen: {performance_hs}")
     logger.info(f"Hard unseen: {performance_hu}")
 
-    wandb.log(performance_es)
-    wandb.log(performance_eu)
-    wandb.log(performance_hs)
-    wandb.log(performance_hu)
-
-    es_frame = evaluator_es.get_dice_as_df()
-    eu_frame = evaluator_eu.get_dice_as_df()
-    hs_frame = evaluator_hs.get_dice_as_df()
-    hu_frame = evaluator_hu.get_dice_as_df()
-
-    full_frame = pd.concat([es_frame, eu_frame, hs_frame, hu_frame], axis=0)
-    full_frame.rename(columns={"Dice": model_name})
-    full_frame.to_csv(Path(PRED_DIR, model_name+".csv"), index=False)
-
 @app.command()
 def get_mean_std_dev():
+    """Calculate mean and standard deviation values over all datasets
+    """
     mean, std = calculate_mean_std(get_datasets())
     print(f"Means over all images: {mean}")
     print(f"Standard deviation over all images: {std}")

@@ -1,7 +1,37 @@
 import torch
-from torchvision.models import swin_v2_t, Swin_V2_T_Weights, swin_v2_s, Swin_V2_S_Weights
-from scripts.models.UNet.modules import Up, DoubleConv
-from scripts.models.PVS.fusion_modules import FusionSimple
+from torchvision.models import swin_v2_t, Swin_V2_T_Weights
+from scripts.models.UNet.modules import Up
+from torchvision.models import convnext_tiny, ConvNeXt_Tiny_Weights
+
+class ConvNextEncoder(torch.nn.Module):
+    def __init__(self, backbone: any = convnext_tiny(weights = ConvNeXt_Tiny_Weights.DEFAULT), stages: int = 4) -> None:
+        """Initialization
+        """
+        super(ConvNextEncoder, self).__init__()
+        assert 1 <= stages <= 4, "Value for number of stages out of bounds. Make sure it is between 1 and 4"
+        self.stages = stages
+        self.feature_extractor = backbone.features[:stages*2]
+
+    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor]:
+        """Generate encoded states.
+
+        Args:
+            x (torch.Tensor): Input image.
+
+        Returns:
+            tuple[torch.Tensor]: Encoded states after the first, second and third encoding layer
+        """
+        # incoming image: b x f x c x h x w
+        in_shape = x.shape
+        out = []
+        # flatten batch and frame layer
+        x = x.view(-1, *x.shape[2:])
+        for i in range(self.stages):
+            x = self.feature_extractor[(i*2):(i+1)*2](x)
+            features = x.view(*in_shape[:2], *x.shape[1:])
+            out.append(features)
+        return out
+
 
 class SwinEncoder(torch.nn.Module):
     def __init__(self, backbone: any = swin_v2_t(weights = Swin_V2_T_Weights.DEFAULT), stages: int = 4) -> None:
@@ -81,173 +111,7 @@ class Decoder4(torch.nn.Module):
         x = self.up3(x, x1)
         x = self.up4(x)
         return x
-    
-class UpModified(torch.nn.Module):
-    """Upscaling then double conv"""
 
-    def __init__(self, in_channels, out_channels, bilinear=True):
-        super().__init__()
-
-        # if bilinear, use the normal convolutions to reduce the number of channels
-        if bilinear:
-            self.up = torch.nn.Upsample(scale_factor=2, mode="bilinear", align_corners=True)
-            self.conv = DoubleConv(in_channels, out_channels, in_channels // 2)
-        else:
-            self.up = torch.nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
-            self.conv = DoubleConv(out_channels*2, out_channels)
-
-    def forward(self, x1, x2):
-        x1 = self.up(x1)
-        # input is CHW
-        diffY = x2.size()[2] - x1.size()[2]
-        diffX = x2.size()[3] - x1.size()[3]
-
-        x1 = torch.nn.functional.pad(x1, [diffX // 2, diffX - diffX // 2, diffY // 2, diffY - diffY // 2])
-        # if you have padding issues, see
-        # https://github.com/HaiyongJiang/U-Net-Pytorch-Unstructured-Buggy/commit/0e854509c2cea854e247a9c615f175f76fbb2e3a
-        # https://github.com/xiaopeng-liao/Pytorch-UNet/commit/8ebac70e633bac59fc22bb5195e513d5832fb3bd
-        x = torch.cat([x2, x1], dim=1)
-        return self.conv(x)
-    
-class DecoderNSA(torch.nn.Module):
-    """UNet inspired decoder with skip connections
-    """
-    def __init__(self) -> None:
-        """Initialization
-        """
-        super(DecoderNSA, self).__init__()
-        self.up1 = UpModified(96, 384, bilinear=False)
-        self.up2 = Up(384, 192, bilinear=False)
-        self.up3 = Up(192, 96, bilinear=False)
-        self.up4 = torch.nn.Sequential(
-            torch.nn.ConvTranspose2d(96, 48, kernel_size=2, stride=2, bias=False),
-            torch.nn.BatchNorm2d(48),
-            torch.nn.ReLU(),
-            torch.nn.ConvTranspose2d(48, 24, kernel_size=2, stride=2),
-            torch.nn.BatchNorm2d(24),
-            torch.nn.ReLU()
-        )
-
-    def forward(self, x: list[torch.Tensor]) -> torch.Tensor:
-        """Applies decoder
-
-        Args:
-            x (torch.Tensor): fully encoded state
-            skip1 (torch.Tensor): state after first encoding layer
-            skip2 (torch.Tensor): state after second encoding layer
-        Returns:
-            torch.Tensor: Decoded tensor
-        """
-        x1, x2, x3, x4 = x
-        x4 = self.up1(x4, x3)
-        x4 = self.up2(x4, x2)
-        x4 = self.up3(x4, x1)
-        x4 = self.up4(x4)
-        return x4
-
-class DecoderNSA3(torch.nn.Module):
-    """UNet inspired decoder with skip connections
-    """
-    def __init__(self) -> None:
-        """Initialization
-        """
-        super(DecoderNSA3, self).__init__()
-        self.up1 = UpModified(48, 192, bilinear=False)
-        self.up2 = Up(192, 96, bilinear=False)
-        self.up3 = torch.nn.Sequential(
-            torch.nn.ConvTranspose2d(96, 48, kernel_size=2, stride=2, bias=False),
-            torch.nn.BatchNorm2d(48),
-            torch.nn.ReLU(),
-            torch.nn.ConvTranspose2d(48, 24, kernel_size=2, stride=2),
-            torch.nn.BatchNorm2d(24),
-            torch.nn.ReLU()
-        )
-
-    def forward(self, x: list[torch.Tensor]) -> torch.Tensor:
-        """Applies decoder
-
-        Args:
-            x (torch.Tensor): fully encoded state
-            skip1 (torch.Tensor): state after first encoding layer
-            skip2 (torch.Tensor): state after second encoding layer
-        Returns:
-            torch.Tensor: Decoded tensor
-        """
-        x1, x2, x3 = x
-        x3 = self.up1(x3, x2)
-        x3 = self.up2(x3, x1)
-        x3 = self.up3(x3)
-        return x3
-
-class DecoderNSA_skip(torch.nn.Module):
-    """UNet inspired decoder with skip connections
-    """
-    def __init__(self) -> None:
-        """Initialization
-        """
-        super(DecoderNSA_skip, self).__init__()
-        self.up1 = Up(96, 48, bilinear=False)
-        self.up2 = Up(48, 24, bilinear=False)
-        self.up3 = Up(24, 24, bilinear=False)
-        self.up4 = torch.nn.Sequential(
-            torch.nn.ConvTranspose2d(24, 24, kernel_size=2, stride=2, bias=False),
-            torch.nn.BatchNorm2d(24),
-            torch.nn.ReLU(),
-            torch.nn.ConvTranspose2d(24, 24, kernel_size=2, stride=2),
-            torch.nn.BatchNorm2d(24),
-            torch.nn.ReLU()
-        )
-
-    def forward(self, x: list[torch.Tensor]) -> torch.Tensor:
-        """Applies decoder
-
-        Args:
-            x (torch.Tensor): fully encoded state
-            skip1 (torch.Tensor): state after first encoding layer
-            skip2 (torch.Tensor): state after second encoding layer
-        Returns:
-            torch.Tensor: Decoded tensor
-        """
-        x1, x2, x3, x4 = x
-        x4 = self.up1(x4, x3)
-        x4 = self.up2(x4, x2)
-        x4 = self.up3(x4, x1)
-        x4 = self.up4(x4)
-        return x4
-
-class DecoderNSA_skip3(torch.nn.Module):
-    """UNet inspired decoder with skip connections
-    """
-    def __init__(self) -> None:
-        """Initialization
-        """
-        super(DecoderNSA_skip3, self).__init__()
-        self.up1 = Up(48, 24, bilinear=False)
-        self.up2 = Up(24, 24, bilinear=False)
-        self.up3 = torch.nn.Sequential(
-            torch.nn.ConvTranspose2d(24, 24, kernel_size=2, stride=2, bias=False),
-            torch.nn.BatchNorm2d(24),
-            torch.nn.ReLU(),
-            torch.nn.ConvTranspose2d(24, 24, kernel_size=2, stride=2),
-            torch.nn.BatchNorm2d(24),
-            torch.nn.ReLU()
-        )
-
-    def forward(self, x: list[torch.Tensor]) -> torch.Tensor:
-        """Applies decoder
-
-        Args:
-            x (torch.Tensor): fully encoded state
-            skip1 (torch.Tensor): state after first encoding layer
-            skip2 (torch.Tensor): state after second encoding layer
-        Returns:
-            torch.Tensor: Decoded tensor
-        """
-        x1, x2, x3 = x
-        x3 = self.up1(x3, x2)
-        x3 = self.up2(x3, x1)
-        x3 = self.up3(x3)
-        return x3
 
 class PatchExpansion(torch.nn.Module):
     """Module which reverses patch merging
