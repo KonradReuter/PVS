@@ -2,6 +2,8 @@
 
 Contact: Konrad Reuter, konrad.reuter@tuhh.de
 
+Pretrained weights will follow soon.
+
 This repository contains the source code for PolypNextLSTM. The main components of the model are an encoder based on ConvNext-tiny, a bidirectional convolutional LSTM for fusing information across multiple frames and a UNet-like decoder.
 
 ![PolypNextLSTM](./figures/model.png "PolypNextLSTM")
