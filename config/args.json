@@ -33,7 +33,7 @@
     "scheduler_gamma": 1.0,
     "unique": true,
     "num_folds": 5,
-    "validation_fold": 0,
+    "validation_fold": 1,
     "loss_factors": [1.0],
     "rect_dropout": false,
     "img_dropout": false,

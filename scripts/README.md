@@ -6,13 +6,12 @@ python scripts/main.py pretrain --model-name=<model_name> --file-name=<file_name
 ```
 Runs pretraining using inpainting. In the input images either random rectangles or a whole image is dropped and the goal is to reconstruct the dropped regions. Remember to set random_rect_dropout and/or img_dropout in [args.json](../config/args.json) to true.
 
-The weight file will be saved as "<file_name>_pretrained.pt".
 
 ## Training
 ```
-python scripts/main.py train --model-name=<model_name> --file-name=<file_name> --run-name=<run_name> [--pretrained]
+python scripts/main.py train --model-name=<model_name> --file-name=<file_name> --run-name=<run_name> --pretrained-file=<pretrained_file>
 ```
-Runs the training. If a pretrained weight file should be used, the pretrained flag should be set. The function will look for a file named "<file_name>_pretrained.pt".
+Runs the training using the SUN-SEG training set.
 
 ## MultiThresholdEvaluation
 ```
@@ -95,23 +94,15 @@ State-of-the-art models.
 
 ## --file-name
 
-Name of the weight file that should be loaded/saved. Will be slightly modified by the different functions to avoid naming conflicts.
-
-- The pretrain function save the weights as "<file_name>_pretrained.pt".
-
-- The train function looks for a file named "<file_name>_pretrained.pt" if the pretrained flag is set. It saves the resulting weight file under "<file_name><validation_fold>.pt". The validation fold number is specified in the [args.json](../config/args.json) file.
-
-- The multiThresholdEvaluation function does not add anything to the file name, it simply tries to load "<file_name> as the weight file.
-
-- The evaluate function looks for a weight file as saved by the training function, so "<file_name><validation_fold>.pt".
+Name of the weight file that should be loaded / the model should be saved to.
 
 ## --run-name
 
 Name of the run under which the training/evaluation process is logged in WandB. Can be ignored, if WandB is not used.
 
-## --pretrained
+## --pretrained-file
 
-If true, the train function tries to load pretrained model weights.
+Lets you specify a pretrained weight file that should be loaded.
 
 ## --test-set
 

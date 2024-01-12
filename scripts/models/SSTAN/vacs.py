@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 from einops import rearrange, repeat
-from scripts.models.VACSNet.vit_utils import DropPath, trunc_normal_
+from scripts.models.SSTAN.vit_utils import DropPath, trunc_normal_
 from config.config import args
 
 

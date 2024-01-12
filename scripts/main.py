@@ -13,13 +13,13 @@ from scripts.test import test_loop, Evaluator
 from scripts.train import pre_train_loop, train_loop
 from scripts.utils import EarlyStopping, calculate_mean_std, make_reproducible, get_optimizer, adjust_args
 from scripts.models.PVS.pvs import *
-from scripts.models.PNSPlus.PNSPlusNetwork import PNSPlusNet
-from scripts.models.PNSPlus.PNS_Network import PNSNet
+#from scripts.models.PNSPlus.PNSPlusNetwork import PNSPlusNet
+#from scripts.models.PNSPlus.PNS_Network import PNSNet
 from scripts.models.PraNet.PraNet_Res2Net import get_PraNet
 from scripts.models.SANet.model import get_SANet
 from scripts.models.CASCADE.networks import get_CASCADE
 from scripts.models.SSTAN.vacs import VACSNet
-from scripts.models.Hybrid2d3d.network import get_HybridNet
+#from scripts.models.Hybrid2d3d.network import get_HybridNet
 from scripts.models.COSNet.siamese_model_conf import CoattentionNet
 from scripts.models.TransFuse.TransFuse import get_TransFuse
 from scripts.models.DeepLabV3.deeplab import get_DeepLab
@@ -60,9 +60,9 @@ model_dict = {
     "PraNet": get_PraNet,
     "CASCADE": get_CASCADE,
     "COSNet": CoattentionNet,
-    "HybridNet": get_HybridNet,
-    "PNSNet": PNSNet,
-    "PNSPlusNet": PNSPlusNet,
+    #"HybridNet": get_HybridNet,
+    #"PNSNet": PNSNet,
+    #"PNSPlusNet": PNSPlusNet,
     "VACSNet": VACSNet
 }
 
@@ -77,9 +77,8 @@ def pretrain(model_name:str = "Conv_base3", file_name:str = "model.pt", run_name
         run_name (str, optional): Name of the WandB run. Defaults to "run".
     """
     # adjust args to specific model
+    global args
     args = adjust_args(model_name, args)
-    # add "pretrained" to file name
-    file_name = file_name.split(".")[0]+"_pretrained.pt"
     # initialize wandb run
     if args["use_wandb"]:
         run = wandb.init(project="pvs", config=args, name=run_name)
@@ -103,21 +102,18 @@ def pretrain(model_name:str = "Conv_base3", file_name:str = "model.pt", run_name
 
 
 @app.command()
-def train(model_name:str = "Conv_base3", file_name:str = "model.pt", run_name:str = "run", pretrained: bool = False):
+def train(model_name:str = "Conv_base3", file_name:str = "model.pt", run_name:str = "run", pretrained_file: str = None):
     """Train a model
 
     Args:
         model_name (str, optional): Model name. Defaults to "Conv_base3".
         file_name (str, optional): Weight file name. Defaults to "model.pt".
         run_name (str, optional): WandB run name. Defaults to "run".
-        pretrained (bool, optional): If there exists a pretrained weight file. The weight file is expected to have the name "<file_name>_pretrained.pt". Defaults to False.
+        pretrained_file (str, optional): Name of the pretrained weight file, if there exists one. Defaults to None.
     """
     # Adjust args to specific model
+    global args
     args = adjust_args(model_name, args)
-    # get name of possible pretrained file
-    pt_file_name = file_name.split(".")[0]+"_pretrained.pt"
-    # add the number of the current validation fold to the file name
-    file_name = file_name.split(".")[0]+str(args["validation_fold"])+".pt"
     # initialize WandB
     if args["use_wandb"]:
         run = wandb.init(project="pvs", config=args, name=run_name)
@@ -125,10 +121,10 @@ def train(model_name:str = "Conv_base3", file_name:str = "model.pt", run_name:st
     dataloaders = get_dataloaders(args)
     model = model_dict[model_name]()
     # if there exists a pretrained file, load it
-    if pretrained:
+    if pretrained_file is not None:
         model.out_layer = torch.nn.Conv2d(24, 3, 1)
         model.to(device)
-        model.load_state_dict(torch.load(Path(CHECKPOINT_DIR, pt_file_name)))
+        model.load_state_dict(torch.load(Path(CHECKPOINT_DIR, pretrained_file)))
         model.out_layer = torch.nn.Conv2d(24, 1, 1)
     model.to(device)
     # define optimizer, scheduler and early stopper
@@ -154,6 +150,7 @@ def multiThresholdEvaluation(model_name:str = "Conv_base3", file_name: str = "mo
         test_set (str, optional): Name of the test set that should be used for evaluation. Defaults to "masked_vid_test_easy_seen".
     """
     # adjust args to specific model
+    global args
     args = adjust_args(model_name, args)
     # initialize wandb
     if args["use_wandb"]:
@@ -217,9 +214,8 @@ def evaluate(model_name: str = "Conv_base3", file_name:str = "model.pt", run_nam
         run_name (str, optional): Name of the WandB run. Defaults to "run".
     """
     # Adjust args to specific model
+    global args
     args = adjust_args(model_name, args)
-    # add validation fold number to file name
-    file_name = file_name.split(".")[0]+str(args["validation_fold"])+".pt"
     # initialize wandb
     if args["use_wandb"]:
         run = wandb.init(project="pvs", config=args, name = run_name)

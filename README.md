@@ -19,7 +19,11 @@ Clone the repository and create a data folder:
 
 Request and prepare the SUN-SEG dataset as explained [here](https://github.com/GewelsJI/VPS/blob/main/docs/DATA_PREPARATION.md) and move it to the created data folder.
 
+For Windows users: The script to reorganize the file structure from the linked repository above will not work. Instead, use our slightly modified [script](./scripts/models/PNSPlus/utils/reorganize.py). After that you should manually remove the "SUN-Positive" folder and rename "SUN-SEG-Annotation" into "SUN-SEG".
+
 ## Create Virtual Environment and Install Dependencies
+
+Python > 3.9 is recommended.
 
 ```
 python3 -m venv venv
@@ -37,7 +41,7 @@ python scripts/main.py evaluate --model-name=<model_name> --file-name=<file_name
 ```
 Here the **model-name** defines which model is trained/evaluated. Our proposed model from above can be selected under the name "Conv_LSTM". Several other models used in our experiments can be used. A full list is given [here](scripts/README.md).
 
-The **file-name** defines the name of the weight file. The validation fold number will automatically be added to the end of the file name.
+The **file-name** defines the name of the weight file the model is saved to / loaded from.
 
 The **run-name** defines the name under which the run is logged in WandB.
 
