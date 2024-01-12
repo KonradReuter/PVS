@@ -34,7 +34,7 @@ You can edit the hyperparameters in the args.json in order to adjust the trainin
 - **save_attention_maps**: If true, attention maps are generated and saved using medcam.
 - **weight_decay**: Weight decay factor.
 - **scheduler_gamma**: Gamma value for the exponential learning rate scheduler.
-- **unique**: If true, each image is only used once as input to the model during testing. Set to false for models returning only one output per input image.
+- **unique**: If true, each image is only used once as input to the model during testing. Set to false for models returning only one output per input sequence.
 - **num_folds**: Number of folds for cross validation.
 - **validation_fold**: Defines which fold should be used for validation.
 - **loss_factors**: For models using deep supervision, the different losses can be weighted with different factors.

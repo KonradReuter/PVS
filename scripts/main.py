@@ -231,14 +231,14 @@ def evaluate(model_name: str = "Conv_base3", file_name:str = "model.pt", run_nam
     evaluator_es = Evaluator(
         accuracy=False,
         precision=False,
-        recall=False,
+        recall=True,
         specificity=False,
-        IOU=False,
+        IOU=True,
         dice=True,
         F1=False,
         F2=False,
         MAE=False,
-        hd95=False,
+        hd95=True,
         threshold=args["threshold"],
     )
     evaluator_eu = copy.deepcopy(evaluator_es)

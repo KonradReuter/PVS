@@ -10,7 +10,7 @@ This repository contains the source code for PolypNextLSTM. The main components 
 
 ![Components](./figures/model_components.png "Components")
 
-## Data preparation
+## Data Preparation
 
 Clone the repository and create a data folder:
  ```
