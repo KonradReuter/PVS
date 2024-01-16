@@ -2,8 +2,6 @@
 
 Contact: Konrad Reuter, konrad.reuter@tuhh.de
 
-Pretrained weights will follow soon.
-
 This repository contains the source code for PolypNextLSTM. The main components of the model are an encoder based on ConvNext-tiny, a bidirectional convolutional LSTM for fusing information across multiple frames and a UNet-like decoder.
 
 ![PolypNextLSTM](./figures/model.png "PolypNextLSTM")
@@ -72,7 +70,7 @@ cd scripts/models/PNSPlus
 python setup.py build develop
 ```
 
-### SOTA backbone weights
+### SOTA Backbone Weights
 
 CASCADE, COSNet and TransFuse use pretrained backbone weights, which are not downloaded automatically. Please download the weights from the following links and move them into the according model folder.
 
@@ -80,6 +78,12 @@ CASCADE, COSNet and TransFuse use pretrained backbone weights, which are not dow
 - [DeepLabV3](https://drive.google.com/file/d/1hy0-BAEestT9H4a3Sv78xrHrzmZga9mj/view) (COSNet)
 - [ResNet34](https://download.pytorch.org/models/resnet34-333f7ec4.pth) (TransFuse)
 - [DeiT-small](https://dl.fbaipublicfiles.com/deit/deit_small_patch16_224-cd65a155.pth) (TransFuse)
+
+### Pretrained Weights
+
+Pretrained weights for PolypNextLSTM can be downloaded from [here](https://drive.google.com/drive/folders/1e7tjGWNiif6tLL4RJaCBck7fzj-_mSOm?usp=sharing). The number at the end of the file name refers to the group of clips that was used for validation during 5-fold cross validation.
+
+Weights for all other models trained in our experiments can be provided on request.
 
 ## Code from other repositories
 
