@@ -588,7 +588,6 @@ def get_datasets() -> list[Dataset]:
     #HyperKvasir_vid_train = VideoDataset(Path(config.DATA_DIR, "HyperKvasir_vid_60/train"), masked=False)
     #HyperKvasir_vid_test = VideoDataset(Path(config.DATA_DIR, "HyperKvasir_vid_60/validation"), masked=False)
     SUNSEG_train = SUNSEG(Path(config.DATA_DIR, "SUN-SEG/TrainDataset"))
-    SUNSEG_valid = SUNSEG(Path(config.DATA_DIR, "SUN-SEG/ValidationDataset"))
     SUNSEG_test_easy_seen = SUNSEG(Path(config.DATA_DIR, "SUN-SEG/TestEasyDataset/Seen"))
     SUNSEG_test_easy_unseen = SUNSEG(Path(config.DATA_DIR, "SUN-SEG/TestEasyDataset/Unseen"))
     SUNSEG_test_hard_seen = SUNSEG(Path(config.DATA_DIR, "SUN-SEG/TestHardDataset/Seen"))
@@ -599,7 +598,6 @@ def get_datasets() -> list[Dataset]:
                     #HyperKvasir_vid_train,
                     #HyperKvasir_vid_test,
                     SUNSEG_train,
-                    SUNSEG_valid,
                     SUNSEG_test_easy_seen,
                     SUNSEG_test_easy_unseen,
                     SUNSEG_test_hard_seen,
