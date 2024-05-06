@@ -63,7 +63,8 @@ model_dict = {
     #"HybridNet": get_HybridNet,
     #"PNSNet": PNSNet,
     #"PNSPlusNet": PNSPlusNet,
-    "VACSNet": VACSNet
+    "VACSNet": VACSNet,
+    "Conv_LSTM_unpruned": ConvNext_LSTM_unpruned
 }
 
 # pretraining was not used in our experiments

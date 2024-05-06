@@ -25,4 +25,6 @@ cross_validation(){
     sed -i 's/"validation_fold": 4/"validation_fold": 0/g' config/args.json
 }
 
-cross_validation Conv_LSTM_single Conv_LSTM_single.pt Conv_LSTM_single
+#cross_validation Conv_LSTM_single Conv_LSTM_single.pt Conv_LSTM_single
+
+cross_validation Conv_LSTM_unpruned Conv_LSTM_unpruned.pt Conv_LSTM_unpruned

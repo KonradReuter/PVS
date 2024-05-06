@@ -129,9 +129,13 @@ def test_model():
 def ConvNext_LSTM_single():
     return PVS(ConvNextEncoder(stages = 3), FusionLSTM([384], bidirectional=False), Decoder3())
 
+def ConvNext_LSTM_unpruned():
+    return PVS(ConvNextEncoder(stages = 4), FusionLSTM([768], bidirectional=True, skip_connection=False), Decoder4())
+
 
 if __name__ == "__main__":
-    model = ConvNext_NSA()
+    model = ConvNext_LSTM_unpruned()
     input = torch.randn(1, 5, 3, 256, 256)
+    print(model)
     print(model(input).shape)
 
