@@ -64,17 +64,17 @@ class Evaluator(object):
         self.threshold = threshold
         self.paths_list = []
 
-    def update_per_img(self, prediction: torch.Tensor, target: torch.Tensor, image_paths: list) -> None:
+    def update_per_img(self, prediction: torch.Tensor, target: torch.Tensor, image_paths: list, args: dict) -> None:
         assert prediction.shape[1] == target.shape[1] == len(image_paths)
         for b in range(len(prediction)):
             for f in range(prediction.shape[1]):
                 pred = prediction[b, f, ...]
                 tgt = target[b, f, ...]
                 img_path = image_paths[f][b]
-                self.update(pred, tgt, img_path)
+                self.update(pred, tgt, img_path, args)
 
 
-    def update(self, prediction: torch.Tensor, target: torch.Tensor, image_path: str) -> None:
+    def update(self, prediction: torch.Tensor, target: torch.Tensor, image_path: str, args: dict) -> None:
         """Update the metrics based on a new prediction
 
         Args:
@@ -175,7 +175,7 @@ class Evaluator(object):
                 self.MAE_list[idx] = mae
 
         if self.hd95:
-            if prediction.max() == 0:
+            if prediction.max() == 0 or target.max() == 0:
                 hd = float('nan')
             else:
                 hd = torch.tensor(hd95(prediction.detach().cpu().numpy(), target.detach().cpu().numpy()))
@@ -194,42 +194,41 @@ class Evaluator(object):
         if self.precision or self.hd95:
             metrics["zero predictions"] = self.zero_pred_counter
         if self.accuracy:
-            metrics["accuracy"] = torch.mean(torch.stack(self.accuracy_list)).item()
-            metrics["accuracy std"] = torch.std(torch.stack(self.accuracy_list)).item()
-            #logger.info(f"accuracy list: {torch.stack(self.accuracy_list).cpu().detach().numpy()}")
+            clean_accuracy_list = [i for i in self.accuracy_list if not isnan(i)]
+            metrics["accuracy"] = torch.mean(torch.stack(clean_accuracy_list)).item()
+            metrics["accuracy std"] = torch.std(torch.stack(clean_accuracy_list)).item()
         if self.precision:
             clean_precision_list = [i for i in self.precision_list if not isnan(i)]
             metrics["precision"] = torch.mean(torch.stack(clean_precision_list)).item()
             metrics["precision std"] = torch.std(torch.stack(clean_precision_list)).item()
-            #logger.info(f"precision list: {torch.stack(self.precision_list).cpu().detach().numpy()}")
         if self.recall:
-            metrics["recall"] = torch.mean(torch.stack(self.recall_list)).item()
-            metrics["recall std"] = torch.std(torch.stack(self.recall_list)).item()
-            #logger.info(f"recall list: {torch.stack(self.recall_list).cpu().detach().numpy()}")
+            clean_recall_list = [i for i in self.recall_list if not isnan(i)]
+            metrics["recall"] = torch.mean(torch.stack(clean_recall_list)).item()
+            metrics["recall std"] = torch.std(torch.stack(clean_recall_list)).item()
         if self.specificity:
-            metrics["specificity"] = torch.mean(torch.stack(self.specificity_list)).item()
-            metrics["specificity std"] = torch.std(torch.stack(self.specificity_list)).item()
-            #logger.info(f"specificity list: {torch.stack(self.specificity_list).cpu().detach().numpy()}")
+            clean_specificity_list = [i for i in self.specificity_list if not isnan(i)]
+            metrics["specificity"] = torch.mean(torch.stack(clean_specificity_list)).item()
+            metrics["specificity std"] = torch.std(torch.stack(clean_specificity_list)).item()
         if self.IOU:
-            metrics["IOU"] = torch.mean(torch.stack(self.IOU_list)).item()
-            metrics["IOU std"] = torch.std(torch.stack(self.IOU_list)).item()
-            #logger.info(f"IOU list: {torch.stack(self.IOU_list).cpu().detach().numpy()}")
+            clean_IOU_list = [i for i in self.IOU_list if not isnan(i)]
+            metrics["IOU"] = torch.mean(torch.stack(clean_IOU_list)).item()
+            metrics["IOU std"] = torch.std(torch.stack(clean_IOU_list)).item()
         if self.dice:
-            metrics["dice"] = torch.mean(torch.stack(self.dice_list)).item()
-            metrics["dice std"] = torch.std(torch.stack(self.dice_list)).item()
-            #logger.info(f"dice list: {torch.stack(self.dice_list).cpu().detach().numpy()}")
+            clean_dice_list = [i for i in self.dice_list if not isnan(i)]
+            metrics["dice"] = torch.mean(torch.stack(clean_dice_list)).item()
+            metrics["dice std"] = torch.std(torch.stack(clean_dice_list)).item()
         if self.F1:
-            metrics["F1"] = torch.mean(torch.stack(self.F1_list)).item()
-            metrics["F1 std"] = torch.std(torch.stack(self.F1_list)).item()
-            #logger.info(f"F1 list: {torch.stack(self.F1_list).cpu().detach().numpy()}")
+            clean_F1_list = [i for i in self.F1_list if not isnan(i)]
+            metrics["F1"] = torch.mean(torch.stack(clean_F1_list)).item()
+            metrics["F1 std"] = torch.std(torch.stack(clean_F1_list)).item()
         if self.F2:
-            metrics["F2"] = torch.mean(torch.stack(self.F2_list)).item()
-            metrics["F2 std"] = torch.std(torch.stack(self.F2_list)).item()
-            #logger.info(f"F2 list: {torch.stack(self.F2_list).cpu().detach().numpy()}")
+            clean_F2_list = [i for i in self.F2_list if not isnan(i)]
+            metrics["F2"] = torch.mean(torch.stack(clean_F2_list)).item()
+            metrics["F2 std"] = torch.std(torch.stack(clean_F2_list)).item()
         if self.MAE:
-            metrics["MAE"] = torch.mean(torch.stack(self.MAE_list)).item()
-            metrics["MAE std"] = torch.std(torch.stack(self.MAE_list)).item()
-            #logger.info(f"MAE list: {torch.stack(self.MAE_list).cpu().detach().numpy()}")
+            clean_MAE_list = [i for i in self.MAE_list if not isnan(i)]
+            metrics["MAE"] = torch.mean(torch.stack(clean_MAE_list)).item()
+            metrics["MAE std"] = torch.std(torch.stack(clean_MAE_list)).item()
         if self.hd95:
             clean_hd95_list = [i for i in self.hd95_list if not isnan(i)]
             metrics["hd95"] = torch.mean(torch.stack(clean_hd95_list)).item()
@@ -336,9 +335,9 @@ def test_loop(dataloader: DataLoader, model: any, loss_fn: any, args: dict, eval
                 _save_predictions(pred, img_paths, model_name, set_name)
             if type(evaluator) == list:
                 for e in evaluator:
-                    e.update_per_img(pred, mask, img_paths)
+                    e.update_per_img(pred, mask, img_paths, args)
             else:
-                evaluator.update_per_img(pred, mask, img_paths)
+                evaluator.update_per_img(pred, mask, img_paths, args)
             loss = loss_fn(pred, mask)
             test_loss += loss.item()
 

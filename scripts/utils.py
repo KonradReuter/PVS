@@ -72,7 +72,7 @@ class EarlyStopping:
         self.val_loss_min = val_loss
 
 
-def print_example(dataloader: DataLoader, figsize: tuple[int, int] = (2, 2)) -> None:
+def print_example(dataloader: DataLoader, figsize: tuple[int, int] = (10, 10)) -> None:
     """Prints an example from the given dataloader
 
     Args:
@@ -105,7 +105,8 @@ def print_example(dataloader: DataLoader, figsize: tuple[int, int] = (2, 2)) -> 
         figure.add_subplot(2, len(img_mask_list) // 2, i + 1)
         plt.imshow(img_mask_list[i].permute(1, 2, 0))
         plt.axis("off")
-    plt.show()
+    plt.savefig("example.png")
+    #plt.show()
 
 
 def make_reproducible(seed: int = 42) -> None:

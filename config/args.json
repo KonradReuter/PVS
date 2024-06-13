@@ -37,5 +37,6 @@
     "loss_factors": [1.0],
     "rect_dropout": false,
     "img_dropout": false,
-    "use_wandb": true
+    "use_wandb": true,
+    "use_full_SUNSEG": true
 }

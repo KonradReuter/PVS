@@ -8,10 +8,11 @@ import json
 
 BASE_DIR = Path(__file__).parent.parent.absolute()
 CONFIG_DIR = Path(BASE_DIR, "config")
-DATA_DIR = Path(BASE_DIR, "data")
+DATA_DIR = Path("/data/Reuter")  #Path(BASE_DIR, "data")
 LOGS_DIR = Path(BASE_DIR, "logs")
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
-CHECKPOINT_DIR = Path(BASE_DIR, "checkpoints")
+#CHECKPOINT_DIR = Path(BASE_DIR, "checkpoints")
+CHECKPOINT_DIR = Path("/data/Reuter/checkpoints")
 CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 ATT_MAP_DIR = Path(BASE_DIR, "attention_maps")
 ATT_MAP_DIR.mkdir(parents=True, exist_ok=True)

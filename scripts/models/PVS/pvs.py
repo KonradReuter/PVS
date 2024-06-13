@@ -132,6 +132,9 @@ def ConvNext_LSTM_single():
 def ConvNext_LSTM_unpruned():
     return PVS(ConvNextEncoder(stages = 4), FusionLSTM([768], bidirectional=True, skip_connection=False), Decoder4())
 
+def ConvNext_LSTM_S():
+    return PVS(ConvNextEncoder(backbone=convnext_small(ConvNeXt_Small_Weights.DEFAULT), stages=3), FusionLSTM(filters=[384], bidirectional=True, skip_connection=False), Decoder3())
+
 
 if __name__ == "__main__":
     model = ConvNext_LSTM_unpruned()

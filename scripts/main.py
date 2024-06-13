@@ -13,13 +13,13 @@ from scripts.test import test_loop, Evaluator
 from scripts.train import pre_train_loop, train_loop
 from scripts.utils import EarlyStopping, calculate_mean_std, make_reproducible, get_optimizer, adjust_args
 from scripts.models.PVS.pvs import *
-#from scripts.models.PNSPlus.PNSPlusNetwork import PNSPlusNet
-#from scripts.models.PNSPlus.PNS_Network import PNSNet
+from scripts.models.PNSPlus.PNSPlusNetwork import PNSPlusNet
+from scripts.models.PNSPlus.PNS_Network import PNSNet
 from scripts.models.PraNet.PraNet_Res2Net import get_PraNet
 from scripts.models.SANet.model import get_SANet
 from scripts.models.CASCADE.networks import get_CASCADE
 from scripts.models.SSTAN.vacs import VACSNet
-#from scripts.models.Hybrid2d3d.network import get_HybridNet
+from scripts.models.Hybrid2d3d.network import get_HybridNet
 from scripts.models.COSNet.siamese_model_conf import CoattentionNet
 from scripts.models.TransFuse.TransFuse import get_TransFuse
 from scripts.models.DeepLabV3.deeplab import get_DeepLab
@@ -60,11 +60,12 @@ model_dict = {
     "PraNet": get_PraNet,
     "CASCADE": get_CASCADE,
     "COSNet": CoattentionNet,
-    #"HybridNet": get_HybridNet,
-    #"PNSNet": PNSNet,
-    #"PNSPlusNet": PNSPlusNet,
+    "HybridNet": get_HybridNet,
+    "PNSNet": PNSNet,
+    "PNSPlusNet": PNSPlusNet,
     "VACSNet": VACSNet,
-    "Conv_LSTM_unpruned": ConvNext_LSTM_unpruned
+    "Conv_LSTM_unpruned": ConvNext_LSTM_unpruned,
+    "Conv_LSTM_S": ConvNext_LSTM_S
 }
 
 # pretraining was not used in our experiments
@@ -251,6 +252,7 @@ def evaluate(model_name: str = "Conv_base3", file_name:str = "model.pt", run_nam
     test_loop(dataloaders["masked_vid_test_easy_unseen"], model, loss, args, evaluator_eu, model_name, "EU")
     test_loop(dataloaders["masked_vid_test_hard_seen"], model, loss, args, evaluator_hs, model_name, "HS")
     test_loop(dataloaders["masked_vid_test_hard_unseen"], model, loss, args, evaluator_hu, model_name, "HU")
+    #test_loop(dataloaders["PolypGen"], model, loss, args, evaluator_es, model_name, "PolypGen")
 
     # get performance metrics
     performance_es = evaluator_es.getMetrics()

@@ -235,6 +235,7 @@ class SUNSEG(Dataset):
 
             # get all image files and sort them
             tmp_list = os.listdir(cls_img_path)
+            tmp_list = [img for img in tmp_list if img.split('.')[-1] == 'jpg']
             tmp_list.sort(key=lambda name: (
                 int(name.split('-')[0].split('_')[-1]),
                 int(name.split('_a')[1].split('_')[0]),
@@ -259,6 +260,155 @@ class SUNSEG(Dataset):
         # create file list for each data point
         # iterate through classes
         for cls in cls_list:
+            li = self.video_filelist[cls]
+            if unique:
+                step = consecutive_frames*time_interval
+                end = len(li) - step + 1
+                for begin in range(start, end, step):
+                    for beg in range(begin, begin+time_interval):
+                        batch_clips = []
+                        if anchor_frame:
+                            batch_clips.append(li[0])
+                        for t in range(consecutive_frames):
+                            batch_clips.append(li[beg + time_interval*t])
+                        self.video_train_list.append(batch_clips)
+                # append frames missed by previous loop
+                missed_frames = len(li)%step
+                if missed_frames:
+                    begin = len(li)-step
+                    if missed_frames < time_interval:
+                        begin = begin + (time_interval-missed_frames)
+                    for beg in range(begin, len(li)-time_interval*(consecutive_frames-1)):
+                        batch_clips = []
+                        if anchor_frame:
+                            batch_clips.append(li[0])
+                        for t in range(consecutive_frames):
+                            batch_clips.append(li[beg+time_interval*t])
+                        self.video_train_list.append(batch_clips)
+            else:
+                step = 1
+                end = len(li) - (consecutive_frames-1)*time_interval
+                for begin in range(start, end, step):
+                    batch_clips = []
+                    if anchor_frame:
+                        batch_clips.append(li[0])
+                    for t in range(consecutive_frames):
+                        batch_clips.append(li[begin+time_interval*t])
+                    self.video_train_list.append(batch_clips)
+
+        self.img_label_transform = transform
+
+    def __getitem__(self, idx: int) -> tuple[any, any]:
+        """Returns data point for the given index.
+
+        Args:
+            idx (int): Index
+
+        Returns:
+            tuple[any, any]: Tuple of images and masks.
+        """
+        img_label_li = self.video_train_list[idx]
+        IMG = None
+        LABEL = None
+        img_li = []
+        label_li = []
+        img_path_list = []
+        # open and append all images and labels
+        for idx, (img_path, label_path) in enumerate(img_label_li):
+            img = Image.open(img_path).convert('RGB')
+            label = Image.open(label_path).convert('L')
+            img_li.append(img)
+            label_li.append(label)
+            img_path_list.append(img_path)
+        # apply transformations
+        img_li, label_li = self.img_label_transform(img_li, label_li)
+        # Stack images and masks
+        for idx, (img, label) in enumerate(zip(img_li, label_li)):
+            if idx == 0:
+                IMG = torch.zeros(len(img_li), *(img.shape))
+                LABEL = torch.zeros(len(img_li), *(label.shape))
+
+                IMG[idx, :, :, :] = img
+                LABEL[idx, :, :, :] = label
+            else:
+                IMG[idx, :, :, :] = img
+                LABEL[idx, :, :, :] = label
+
+        return IMG, LABEL, img_path_list
+
+    def __len__(self) -> int:
+        """Get number of data points
+
+        Returns:
+            int: Number of data points
+        """
+        return len(self.video_train_list)
+
+class PolypGen2021(Dataset):
+    def __init__(self, path: str, set_list: list = None, transform: any = None, num_frames: int = 5, time_interval: int = 1, anchor_frame: bool = True, unique:bool = False) -> None:
+        """Initialize PolypGen dataset
+
+        Args:
+            path (str): Path to dataset directory.
+            set_list (list, optional): If a list of sets if given, only these will be included into the dataset. Set names must match the folder names under path.
+            transform (any, optional): Transformations to be applied to image/mask. Defaults to None.
+            num_frames (int, optional): Number of frames per data point. Defaults to 5.
+            time_interval (int, optional): Interval between frames. Defaults to 1.
+            anchor_frame (bool, optional): If true, the first frame for each datapoint is the first frame of the underlying video clip. Defaults to True.
+            unique (bool, optional): If true, every image will only be returned once, so there will be no overlaps between the returned data.
+                                     Only the last few items might contain overlaps, if the length of the sequence is not divisible by num_frames. Defaults to False.
+        """
+        super(PolypGen2021, self).__init__()
+        self.image_list = []
+        self.mask_list = []
+        self.path = path
+        self.set_list = set_list
+        self.time_interval = time_interval
+        self.anchor_frame = anchor_frame
+        self.time_clips = num_frames
+        self.video_train_list = []
+
+        # get all sets
+        sequence_list = os.listdir(path)
+        sequence_list = [seq for seq in sequence_list if os.path.isdir(os.path.join(path, seq))]
+        if self.set_list:
+            sequence_list = [clip for clip in sequence_list if clip in self.set_list]
+        else:
+            self.set_list = sequence_list
+
+        self.video_filelist = {}
+        # iterate through the clips
+        for cls in sequence_list:
+            self.video_filelist[cls] = []
+
+            # get img and mask paths
+            cls_img_path = os.path.join(path, cls, "images_"+cls)
+            cls_label_path = os.path.join(path, cls, "masks_"+cls)
+
+            # get all image files and sort them
+            tmp_list = os.listdir(cls_img_path)
+            tmp_list = [img for img in tmp_list if img.split('.')[-1] == 'jpg']
+            tmp_list.sort(key=lambda name: int(name.split('_')[-1].split('.')[0]))
+
+            # iterate through the image names and append image and mask file as tuple to list
+            for filename in tmp_list:
+                self.video_filelist[cls].append((
+                    os.path.join(cls_img_path, filename),
+                    os.path.join(cls_label_path, filename.split('.')[0]+'_mask.jpg')
+                ))
+                # additionally append them to separate lists (to match the structure of other dataset classes)
+                self.image_list.append(os.path.join(cls_img_path, filename))
+                self.mask_list.append(os.path.join(cls_label_path, filename.split('.')[0]+'_mask.jpg'))
+        # set variables based on anchor frame variable
+        if anchor_frame:
+            start = 1
+            consecutive_frames = num_frames - 1
+        else:
+            start = 0
+            consecutive_frames = num_frames
+        # create file list for each data point
+        # iterate through classes
+        for cls in sequence_list:
             li = self.video_filelist[cls]
             if unique:
                 step = consecutive_frames*time_interval
@@ -468,16 +618,18 @@ def get_dataloaders(args: dict) -> dict:
     #)
 
     SUNSEG_train_path = Path(config.DATA_DIR, "SUN-SEG/TrainDataset")
-    #SUNSEG_sets = sorted(os.listdir(Path(SUNSEG_train_path, "Frame")), key=lambda x: int(x.split('e')[1].split('_')[0]))
-    SUNSEG_sets = ['case1_1', 'case2_1', 'case4', 'case5_1', 'case6_1', 'case7_1',
-                   'case15_1', 'case16', 'case17_1', 'case18_1', 'case20_1', 'case21',
-                   'case22', 'case25_1', 'case26_1', 'case28', 'case33_1', 'case35_4',
-                   'case38_1', 'case41', 'case44_2', 'case45_1', 'case46', 'case47_1',
-                   'case49', 'case53', 'case55_1', 'case57', 'case58', 'case59_1',
-                   'case61_1', 'case62_1', 'case63_1', 'case65', 'case66_1', 'case69',
-                   'case71_3', 'case72_2', 'case73_1', 'case75_2', 'case76_1', 'case77',
-                   'case78_1', 'case82', 'case83_1', 'case85_1', 'case87_1', 'case88_1',
-                   'case90_2', 'case92_1', 'case98']
+    if args["use_full_SUNSEG"]:
+        SUNSEG_sets = sorted(os.listdir(Path(SUNSEG_train_path, "Frame")), key=lambda x: int(x.split('e')[1].split('_')[0]))
+    else:
+        SUNSEG_sets = ['case1_1', 'case2_1', 'case4', 'case5_1', 'case6_1', 'case7_1',
+                       'case15_1', 'case16', 'case17_1', 'case18_1', 'case20_1', 'case21',
+                       'case22', 'case25_1', 'case26_1', 'case28', 'case33_1', 'case35_4',
+                       'case38_1', 'case41', 'case44_2', 'case45_1', 'case46', 'case47_1',
+                       'case49', 'case53', 'case55_1', 'case57', 'case58', 'case59_1',
+                       'case61_1', 'case62_1', 'case63_1', 'case65', 'case66_1', 'case69',
+                       'case71_3', 'case72_2', 'case73_1', 'case75_2', 'case76_1', 'case77',
+                       'case78_1', 'case82', 'case83_1', 'case85_1', 'case87_1', 'case88_1',
+                       'case90_2', 'case92_1', 'case98']
     SUNSEG_sets = np.array_split(SUNSEG_sets, args["num_folds"])
     SUNSEG_validation_set = list(SUNSEG_sets[args["validation_fold"]])
     SUNSEG_train_set = list(np.concatenate([SUNSEG_sets[i] for i in range(len(SUNSEG_sets)) if i != args["validation_fold"]]))
@@ -535,6 +687,15 @@ def get_dataloaders(args: dict) -> dict:
         unique=args["unique"]
     )
 
+    PolypGenTest = PolypGen2021(
+        Path(config.DATA_DIR, "PolypGen2021_MultiCenterData_v3/sequenceData/positive_cut"),
+        transform = test_transforms,
+        num_frames = args["num_frames"],
+        time_interval=args["time_interval"],
+        anchor_frame=args["anchor_frame"],
+        unique=args["unique"]
+    )
+
     # for reproducibility
     def seed_workers(worker_id):
         worker_seed = torch.initial_seed() % 2**32
@@ -551,12 +712,13 @@ def get_dataloaders(args: dict) -> dict:
     #image_valid_dl = DataLoader(SEG_test, batch_size=args["batch_size"], shuffle=args["shuffle_data"], num_workers=args["n_workers"], worker_init_fn=seed_workers, generator=g)
     #HK_vid_train_dl = DataLoader(HyperKvasir_vid_train, batch_size=args["batch_size"], shuffle=args["shuffle_data"], num_workers=args["n_workers"], worker_init_fn=seed_workers, generator=g)
     #HK_vid_valid_dl = DataLoader(HyperKvasir_vid_test, batch_size=args["batch_size"], shuffle=args["shuffle_data"], num_workers=args["n_workers"], worker_init_fn=seed_workers, generator=g)
-    SUNSEG_train_dl = DataLoader(SUNSEG_train, batch_size=args["batch_size"], shuffle=args["shuffle_data"], num_workers=args["n_workers"], worker_init_fn=seed_workers, generator=g)
+    SUNSEG_train_dl = DataLoader(SUNSEG_train, batch_size=args["batch_size"], shuffle=args["shuffle_data"], num_workers=args["n_workers"], worker_init_fn=seed_workers, drop_last=True, generator=g)
     SUNSEG_valid_dl = DataLoader(SUNSEG_valid, batch_size=args["batch_size"], shuffle=args["shuffle_data"], num_workers=args["n_workers"], worker_init_fn=seed_workers, generator=g)
     SUNSEG_test_easy_seen_dl = DataLoader(SUNSEG_test_easy_seen, batch_size=args["batch_size"], shuffle=args["shuffle_data"], num_workers=args["n_workers"], worker_init_fn=seed_workers, generator=g)
     SUNSEG_test_easy_unseen_dl = DataLoader(SUNSEG_test_easy_unseen, batch_size=args["batch_size"], shuffle=args["shuffle_data"], num_workers=args["n_workers"], worker_init_fn=seed_workers, generator=g)
     SUNSEG_test_hard_seen_dl = DataLoader(SUNSEG_test_hard_seen, batch_size=args["batch_size"], shuffle=args["shuffle_data"], num_workers=args["n_workers"], worker_init_fn=seed_workers, generator=g)
     SUNSEG_test_hard_unseen_dl = DataLoader(SUNSEG_test_hard_unseen, batch_size=args["batch_size"], shuffle=args["shuffle_data"], num_workers=args["n_workers"], worker_init_fn=seed_workers, generator=g)
+    PolypGen_dl = DataLoader(PolypGenTest, batch_size=args["batch_size"], shuffle=args["shuffle_data"], num_workers=args["n_workers"], worker_init_fn=seed_workers, generator=g)
 
 
     # create and return dictionary with all datasets
@@ -572,7 +734,8 @@ def get_dataloaders(args: dict) -> dict:
         "masked_vid_test_easy_seen": SUNSEG_test_easy_seen_dl,
         "masked_vid_test_easy_unseen": SUNSEG_test_easy_unseen_dl,
         "masked_vid_test_hard_seen": SUNSEG_test_hard_seen_dl,
-        "masked_vid_test_hard_unseen": SUNSEG_test_hard_unseen_dl
+        "masked_vid_test_hard_unseen": SUNSEG_test_hard_unseen_dl,
+        "PolypGen": PolypGen_dl
     }
 
     return dataloaders
@@ -609,7 +772,4 @@ if __name__ == '__main__':
     import json
     args = json.load(open("./config/args.json"))
     dl = get_dataloaders(args)
-    train_sets = dl["masked_vid_train"].dataset.image_list
-    valid_sets = dl["masked_vid_valid"].dataset.image_list
-    schnittmenge = [img for img in train_sets if img in valid_sets]
-    print(schnittmenge)
+    print(len(dl["PolypGen"].dataset.image_list))

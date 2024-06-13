@@ -188,13 +188,13 @@ class FocalTverskyLoss(nn.Module):
         return (1 - tversky) ** self.gamma
     
 class FocalLoss(nn.Module):
-    def __init__(self, alpha: float = 0.25, gamma: float = 2.0, reduction: str = "none") -> None:
+    def __init__(self, smooth: float = 0.0, alpha: float = 0.25, gamma: float = 2.0, reduction: str = "sum") -> None:
         """FocalLoss
 
         Args:
             alpha (float): Weighting factor to balance positive and negative examples. Defaults to 0.25.
             gamma (float): Weighting factor to balance easy and hard examples. Defaults to 2.0.
-            reduction (str): Reduction applied to the output. Valid options are "none", "mean" and "sum". Defaults to "none".
+            reduction (str): Reduction applied to the output. Valid options are "none", "mean" and "sum". Defaults to "sum".
         """
         super(FocalLoss, self).__init__()
         self.alpha = alpha
